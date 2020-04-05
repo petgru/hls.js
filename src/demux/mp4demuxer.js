@@ -64,6 +64,22 @@ class MP4Demuxer {
     return String.fromCharCode.apply(null, buffer);
   }
 
+  static readNullTerminatedString (buffer, offset) {
+    if (buffer.data) {
+      offset += buffer.start;
+      buffer = buffer.data;
+    }
+
+    let value = '';
+    for (let i = offset; i < buffer.byteLength; i++) {
+      if (buffer[i] === 0x00) { // the name field is null-terminated
+        break;
+      }
+      value += String.fromCharCode(buffer[i]);
+    }
+    return value;
+  }
+
   static readUint16 (buffer, offset) {
     if (buffer.data) {
       offset += buffer.start;
@@ -87,6 +103,23 @@ class MP4Demuxer {
                 buffer[offset + 2] << 8 |
                 buffer[offset + 3];
     return val < 0 ? 4294967296 + val : val;
+  }
+
+  static readUint64 (buffer, offset) {
+    if (buffer.data) {
+      offset += buffer.start;
+      buffer = buffer.data;
+    }
+
+    const val = buffer[offset] << 56 |
+                buffer[offset + 1] << 48 |
+                buffer[offset + 2] << 40 |
+                buffer[offset + 3] << 32 |
+                buffer[offset + 4] << 24 |
+                buffer[offset + 5] << 16 |
+                buffer[offset + 6] << 8 |
+                buffer[offset + 7];
+    return val < 0 ? 18446744073709551615 + val : val;
   }
 
   static writeUint32 (buffer, offset, value) {
