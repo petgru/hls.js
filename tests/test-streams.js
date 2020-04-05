@@ -189,5 +189,9 @@ module.exports = {
     description: 'PDT before each segment, 1.59s start gap',
     abr: true,
     startSeek: true
+  },
+  emsgWithID3v2: {
+    url: 'https://storage.googleapis.com/dlevin/tmp/fmp4-emsg-id3/1567191409/master.m3u8',
+    description: 'HLS/CMAF stream with ID3v2 data in emsg'
   }
 };
