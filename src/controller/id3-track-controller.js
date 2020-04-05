@@ -71,7 +71,7 @@ class ID3TrackController extends EventHandler {
       const frames = ID3.getID3Frames(samples[i].data);
       if (frames) {
         const startTime = samples[i].pts;
-        let endTime = i < samples.length - 1 ? samples[i + 1].pts : fragment.endPTS;
+        let endTime = samples[i].endPTS || (i < samples.length - 1 ? samples[i + 1].pts : fragment.endPTS);
 
         if (startTime === endTime) {
           // Give a slight bump to the endTime if it's equal to startTime to avoid a SyntaxError in IE

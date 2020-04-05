@@ -3,6 +3,7 @@
  */
 import { logger } from '../utils/logger';
 import Event from '../events';
+import ID3 from './id3';
 
 const UINT32_MAX = Math.pow(2, 32) - 1;
 
@@ -408,6 +409,63 @@ class MP4Demuxer {
     });
   }
 
+  // Based on https://aomediacodec.github.io/id3-emsg/
+  processID3Data (emsgBoxes, initPTS) {
+    let samples = [];
+    emsgBoxes.map((emsg) => {
+      let index = emsg.start, sample = { pts: 0, endPTS: 0, data: null, len: 0 };
+
+      // Version is Uint8, but we skip the flags afterwards (3 bytes)
+      const version = emsg.data[index];
+      index += 4;
+
+      // CMAF requires Version 1
+      if (version !== 1) {
+        return;
+      }
+
+      // Timescale is Uint32
+      const timescale = MP4Demuxer.readUint32(emsg.data, index);
+      index += 4;
+
+      // Presentation time is Uint64
+      const presentationTime = MP4Demuxer.readUint64(emsg.data, index);
+      index += 8;
+      sample.pts = presentationTime / timescale - initPTS;
+
+      // Event duration is Uint32
+      const eventDuration = MP4Demuxer.readUint32(emsg.data, index);
+      index += 4;
+      sample.endPTS = sample.pts + eventDuration / timescale;
+
+      // ID is Uint32 - skipping
+      index += 4;
+
+      // Read null-termenated string for schema
+      const schemaIdURI = MP4Demuxer.readNullTerminatedString(emsg.data, index);
+      index += schemaIdURI.length + 1;
+
+      // eMSG box includes something else than ID3, aborting
+      if (schemaIdURI !== 'https://aomedia.org/emsg/ID3') {
+        return;
+      }
+
+      // Read null-termenated string for value, skipping but need length
+      const value = MP4Demuxer.readNullTerminatedString(emsg.data, index);
+      index += value.length + 1;
+
+      // Remainder of data is ID3v2
+      sample.data = ID3.getID3Data(emsg.data, index);
+      sample.len = sample.data.length;
+
+      samples.push(sample);
+    });
+
+    this.observer.trigger(Event.FRAG_PARSING_METADATA, {
+      samples: samples
+    });
+  }
+
   // feed incoming data to the front of the parsing pipeline
   append (data, timeOffset, contiguous, accurateTimeOffset) {
     let initData = this.initData;
@@ -423,6 +481,13 @@ class MP4Demuxer {
     }
     MP4Demuxer.offsetStartDTS(initData, data, initPTS);
     startDTS = MP4Demuxer.getStartDTS(initData, data);
+
+    // Look for emsgBoxes and process potential for ID3v2 data
+    const emsgBoxes = MP4Demuxer.findBox(data, ['emsg']);
+    if (emsgBoxes.length) {
+      this.processID3Data(emsgBoxes, initPTS, startDTS);
+    }
+
     this.remuxer.remux(initData.audio, initData.video, null, null, startDTS, contiguous, accurateTimeOffset, data);
   }
 
