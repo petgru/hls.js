@@ -144,6 +144,53 @@ var // this is the start of a huge multi-line var decl
         avgBitrate: view.getUint32(8)
       };
     },
+    emsg: function(data) {
+      view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+
+      var result = {
+        version: view.getUint8(0),
+        flags: new Uint8Array(data.subarray(1, 4)),
+        timescale: 0,
+        presentation_time: 0,
+        event_duration: 0,
+        id: 0,
+        scheme_id_uri: '',
+        value: '',
+        message_data: [],
+      };
+
+      if (result.version == 0) {
+        // FIXME: parse version 0 (even if it's not supposed to be used in CMAF)
+      } else if (result.version == 1) {
+        result.timescale = view.getUint32(4);
+        result.presentation_time = view.getUint32(8); // FIXME: should be Uint64
+        result.event_duration = view.getUint32(16);
+        result.id = view.getUint32(20);
+
+        // parse the scheme_id_uri field
+        let i = 24;
+        for (; i < data.byteLength; i++) {
+          if (data[i] === 0x00) { // the name field is null-terminated
+            i++;
+            break;
+          }
+          result.scheme_id_uri += String.fromCharCode(data[i]);
+        }
+
+        // parse the value field
+        for (; i < data.byteLength; i++) {
+          if (data[i] === 0x00) { // the name field is null-terminated
+            i++;
+            break;
+          }
+          result.value += String.fromCharCode(data[i]);
+        }
+
+        result.message_data = data.subarray(i, data.byteLength);
+      }
+
+      return result;
+    },
     ftyp: function(data) {
       var
         view = new DataView(data.buffer, data.byteOffset, data.byteLength),
